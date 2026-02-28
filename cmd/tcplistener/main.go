@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"strings"
+
+	"github.com/RazafimanantsoaJohnson/httpServer/internal/request"
 )
 
 func main() {
@@ -22,9 +24,11 @@ func main() {
 			log.Fatalf("%v", err)
 		}
 		fmt.Println("Connection Accepted")
-		for line := range getLinesChannel(conn) {
-			fmt.Println(line)
+		request, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("%v", err)
 		}
+		fmt.Printf("Request line:\n- Method: %v\n- Target: %v\n- Version: %v\n", request.RequestLine.Method, request.RequestLine.RequestTarget, request.RequestLine.HttpVersion)
 		fmt.Println("Connection Closed")
 	}
 }
