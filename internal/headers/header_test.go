@@ -15,7 +15,7 @@ func TestHeaders(t *testing.T) {
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
+	assert.Equal(t, "localhost:42069", headers["host"])
 	assert.Equal(t, 23, n)
 	assert.False(t, done) //??
 
@@ -43,4 +43,18 @@ func TestHeaders(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, done)
 	assert.Equal(t, 0, n)
+
+	// test with invalid key name
+	data = []byte("MoneyH|@st: 50029\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	assert.Error(t, err)
+	assert.Equal(t, 0, n)
+
+	// test with many values for same key
+	data = []byte("key1: value1\r\nkey1: value2\r\nKEy1: value3\r\n\r\n")
+	firstn, done, err = headers.Parse(data)
+	secondn, done, err := headers.Parse(data[firstn+2:])
+	n, done, err = headers.Parse(data[firstn+secondn+4:])
+	assert.NoError(t, err)
+	assert.Equal(t, "value1,value2,value3", headers["key1"])
 }
