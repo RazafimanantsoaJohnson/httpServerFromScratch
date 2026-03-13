@@ -3,72 +3,57 @@ package headers
 import (
 	"bytes"
 	"fmt"
-	"slices"
 	"strings"
 )
 
+const crlf = "\r\n"
+
 type Header map[string]string
 
-const newLineChar = "\r\n"
-
-func (h Header) Parse(data []byte) (n int, done bool, err error) {
-
-	keyValueLines := bytes.Split(data, []byte(newLineChar))
-
-	if len(keyValueLines) <= 0 {
-		return 0, false, nil
-	}
-	if len(keyValueLines) == 1 || string(keyValueLines[0]) == "" {
-		return 0, true, nil
-	}
-	firstHeader := string(keyValueLines[0])
-	n = len(keyValueLines[0])
-	firstHeader = strings.TrimSpace(firstHeader)
-	firstColonIndex := strings.Index(firstHeader, ":")
-	isHeaderValid := (strings.Index(firstHeader, " ") > firstColonIndex)
-	if !isHeaderValid {
-		return 0, false, fmt.Errorf("wrong header format; spaces after the 'key'")
-	}
-	key := firstHeader[:firstColonIndex]
-	value := strings.TrimSpace(firstHeader[firstColonIndex+1:])
-	isKeyValid := isFieldNameValid(key)
-	fmt.Println("Is key valid: ", isKeyValid)
-	if !isKeyValid {
-		return 0, false, fmt.Errorf("the key '%s' is not valid", key)
-	}
-	headerKey := strings.ToLower(key)
-	currentKeyValue, doesKeyExist := h[strings.ToLower(headerKey)]
-	if doesKeyExist {
-		h[headerKey] = fmt.Sprintf("%s,%s", currentKeyValue, value)
-	} else {
-		h[strings.ToLower(key)] = value
-	}
-
-	return n, false, nil
+func NewHeaders() Header {
+	return map[string]string{}
 }
 
-func isFieldNameValid(fieldName string) bool {
-	validCharacters := []rune{}
-
-	for c := rune('a'); c <= rune('z'); c++ {
-		validCharacters = append(validCharacters, c)
+func (h Header) Parse(data []byte) (n int, done bool, err error) {
+	idx := bytes.Index(data, []byte(crlf))
+	if idx == -1 {
+		return 0, false, nil
 	}
-	for c := rune('A'); c <= rune('Z'); c++ {
-		validCharacters = append(validCharacters, c)
-	}
-	for c := rune('0'); c <= rune('9'); c++ {
-		validCharacters = append(validCharacters, c)
+	if idx == 0 {
+		// done reading
+		return 2, true, nil
 	}
 
-	punct := "!#$%&'*+-.^_`|~"
-	for _, c := range punct {
-		validCharacters = append(validCharacters, c)
+	parts := bytes.SplitN(data[:idx], []byte(":"), 2)
+	key := strings.ToLower(string(parts[0]))
+
+	if key != strings.TrimRight(key, " ") {
+		return 0, false, fmt.Errorf("invalid header name: %s", key)
 	}
-	if len(fieldName) <= 0 {
-		return false
+
+	value := bytes.TrimSpace((parts[1]))
+	key = strings.TrimSpace(key)
+	if !validTokens([]byte(key)) {
+		return 0, false, fmt.Errorf("invalid header token found: %s", key)
 	}
-	for _, fieldChar := range fieldName {
-		if !(slices.Contains(validCharacters, rune(fieldChar))) {
+	h.Set(key, string(value))
+	return idx + 2, false, nil
+}
+
+func (h Header) Set(key, value string) {
+	key = strings.ToLower(key)
+	v, ok := h[key]
+	if ok {
+		value = strings.Join([]string{v, value}, ", ")
+	}
+	h[key] = value
+}
+
+var validTokenChars = []byte{'!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~'}
+
+func validTokens(data []byte) bool {
+	for _, c := range data {
+		if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
 			return false
 		}
 	}
