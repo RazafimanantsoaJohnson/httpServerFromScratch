@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/RazafimanantsoaJohnson/httpServer/internal/headers"
@@ -15,6 +16,7 @@ type ParserStatus int
 const (
 	Initialized ParserStatus = iota
 	ParsingHeader
+	ParsingBody
 	Done
 )
 
@@ -34,6 +36,7 @@ type RequestLine struct {
 }
 
 const bufferInitialSize = 4096
+const contentLengthHeader = "Content-Length"
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	buffer := make([]byte, bufferInitialSize)
@@ -41,6 +44,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	result := Request{
 		ParseStatus: Initialized,
 		Headers:     headers.NewHeaders(),
+		Body:        make([]byte, 0),
 	}
 	for result.ParseStatus != Done {
 		if readToIndex >= len(buffer) {
@@ -155,8 +159,6 @@ func (r *Request) parseSingleLine(data []byte) (int, error) {
 		return n, nil
 	case ParsingHeader:
 		n, done, err := r.Headers.Parse(data)
-		fmt.Println("bytes read in header", n, "\t data content length: ", len(data))
-		fmt.Println("Done: ", done, "; headers: ", r.Headers)
 		if err != nil {
 			return n, err
 		}
@@ -166,8 +168,28 @@ func (r *Request) parseSingleLine(data []byte) (int, error) {
 		if !done {
 			return n, nil
 		}
-		r.ParseStatus = Done
+		r.ParseStatus = ParsingBody
 		return n, nil
+	case ParsingBody:
+		contentLengthStr, isHeaderPresent := r.Headers.Get(contentLengthHeader)
+		fmt.Printf(contentLengthStr)
+		if !isHeaderPresent {
+			r.ParseStatus = Done
+			return len(data), nil
+		}
+		contentLength, err := strconv.Atoi(contentLengthStr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid content length header")
+		}
+
+		r.Body = append(r.Body, data...)
+		if len(r.Body) > contentLength {
+			return len(data), fmt.Errorf("content-length should be equal to the length of body")
+		} else if len(r.Body) == contentLength {
+			r.ParseStatus = Done
+		}
+
+		return len(data), nil
 	case Done:
 		return 0, fmt.Errorf("error: trying to read data in a done state")
 	default:

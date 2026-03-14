@@ -29,6 +29,11 @@ func main() {
 			log.Fatalf("%v", err)
 		}
 		fmt.Printf("Request line:\n- Method: %v\n- Target: %v\n- Version: %v\n", request.RequestLine.Method, request.RequestLine.RequestTarget, request.RequestLine.HttpVersion)
+		fmt.Println("Headers:")
+		for key, value := range request.Headers {
+			fmt.Printf("- %s: %s\n", key, value)
+		}
+		fmt.Printf("Body:\n%s\n", string(request.Body))
 		fmt.Println("Connection Closed")
 	}
 }
